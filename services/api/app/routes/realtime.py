@@ -16,6 +16,7 @@ from app.protocol import parse_client_envelope
 from app.repositories.events_repo import EventsRepository
 from app.services.chat_service import ChatService
 from app.services.events_service import EventsService
+from app.services.tools_service import ToolExecutionError, ToolsService
 
 router = APIRouter(tags=["realtime"])
 
@@ -32,6 +33,7 @@ async def realtime(ws: WebSocket) -> None:
         agent = AgentClient(base_url=agent_base_url, http=http)
         events = EventsService(sessionmaker=get_sessionmaker(ws.app), repo=EventsRepository())
         chat = ChatService(agent=agent, events=events)
+        tools = ToolsService(events=events)
 
         try:
             while True:
@@ -68,11 +70,44 @@ async def realtime(ws: WebSocket) -> None:
                     if msg.forwarded_props and isinstance(msg.forwarded_props.get("uiContext"), dict):
                         ui_context = msg.forwarded_props.get("uiContext")
 
-                    text, ui_actions = await chat.handle_user_message(
+                    chat_resp = await chat.handle_user_message(
                         session_id=thread_id,
                         message=msg.message,
                         context=ui_context,
                     )
+
+                    if chat_resp.tool_calls:
+                        for call in chat_resp.tool_calls:
+                            await ws.send_json(
+                                {
+                                    "type": "TOOL_CALL_STARTED",
+                                    "threadId": thread_id,
+                                    "runId": run_id,
+                                    "toolCallId": call.id,
+                                    "toolName": call.name,
+                                    "args": call.args,
+                                }
+                            )
+
+                            try:
+                                result = await tools.execute(
+                                    session_id=thread_id,
+                                    name=call.name,
+                                    args=call.args,
+                                )
+                            except ToolExecutionError as exc:
+                                raise RuntimeError(f"tool failed: {exc}")
+
+                            await ws.send_json(
+                                {
+                                    "type": "TOOL_CALL_RESULT",
+                                    "threadId": thread_id,
+                                    "runId": run_id,
+                                    "toolCallId": call.id,
+                                    "toolName": call.name,
+                                    "result": result,
+                                }
+                            )
                     agent_calls_total.labels(status="success").inc()
                     agent_call_duration_seconds.observe(time.perf_counter() - started)
                 except Exception as exc:
@@ -97,12 +132,12 @@ async def realtime(ws: WebSocket) -> None:
                         "type": "TEXT_MESSAGE_CHUNK",
                         "messageId": message_id,
                         "role": "assistant",
-                        "delta": text,
+                        "delta": chat_resp.text,
                     }
                 )
 
-                if isinstance(ui_actions, list) and ui_actions:
-                    for action in ui_actions:
+                if isinstance(chat_resp.a2ui_actions, list) and chat_resp.a2ui_actions:
+                    for action in chat_resp.a2ui_actions:
                         await ws.send_json(
                             {
                                 "type": "CUSTOM",

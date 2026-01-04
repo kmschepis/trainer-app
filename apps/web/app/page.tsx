@@ -121,6 +121,8 @@ export default function HomePage() {
           }
           if (action.type === "ui.onboarding.close") {
             setIsOnboardingOpen(false);
+            // Server-driven close implies the profile was accepted/saved.
+            setHasProfile(true);
             return;
           }
           if (action.type === "ui.toast") {
@@ -198,7 +200,7 @@ export default function HomePage() {
 
   async function submitOnboarding() {
     // UI-triggered submit. We tell the coach (agent) and include the form draft as context.
-    // The backend will persist `UserOnboarded` via an agent-driven action.
+    // The backend will persist `ProfileSaved` (canonical) via tool execution.
     if (wsState !== "connected") return;
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;

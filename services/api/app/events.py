@@ -32,8 +32,13 @@ def project_state(events: List[Event]) -> Dict[str, Any]:
         t = ev.type
         p = ev.payload
 
-        if t == "UserOnboarded":
+        # Profile lifecycle
+        # - Canonical event name: ProfileSaved
+        # - Backward-compat: UserOnboarded (older DB volumes / event history)
+        if t in ("ProfileSaved", "UserOnboarded"):
             state["profile"] = p
+        elif t == "ProfileDeleted":
+            state["profile"] = None
         elif t == "PlanGenerated":
             state["plan"] = p
         elif t == "WorkoutStarted":
