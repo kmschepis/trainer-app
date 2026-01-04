@@ -74,13 +74,14 @@ Work is done in **numbered units** under `spec/NNN-kebab-case/`, each with:
 - **005 Template hardening**: CI + dependabot + `.env.example` + linting baseline.
 - **014 Chat UI coach console (chat-first)**: polished web UI for local coach iteration (no A2UI/panes).
 - **015 LLM agent integration**: agent can generate chat via an OpenAI-compatible LLM; API can route chat through the agent.
+- **006 Event log + state view**: append-only events + `/state` materialization.
 
 ### Next (to reach the “current project” MVP from `001-Initial_plan.md`)
 
 The next units build Phase 1/2 (events → onboarding → plan → workout canvas → weekly review → plan diffs → fatigue math).
 
-- **006 Event log + state view**: append-only events + `/state` materialization.
-- **007 Onboarding (core loop)**: onboarding interview (chat-first or form) → events → state.
+- **007 Onboarding (core loop)**: onboarding interview (chat-first or form) → validated persistence → state.
+  - Preferred paradigm: agent requests a constrained tool (e.g. `profile.save`), API appends `UserOnboarded`.
 - **008 Plan generation (agent)**: agent generates 1-week plan markdown; persisted as events.
 - **009 Workout canvas + set logging**: workout view (markdown plan + set logger), `SetLogged` events.
 - **010 Weekly review**: weekly summary report + simple charts derived from state.

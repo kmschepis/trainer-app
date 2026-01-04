@@ -2,26 +2,34 @@
 
 ## Implemented
 
-- Added Postgres-backed event storage to API.
-	- New module: `services/api/app/db.py` (asyncpg pool + table init)
-	- New module: `services/api/app/events.py` (minimal projection / reducer)
-	- API endpoints in `services/api/app/main.py`:
-		- `POST /events` (append-only insert)
-		- `GET /state` (read events, project snapshot)
-- Updated web to call `GET /state` and render JSON for debugging: `apps/web/app/page.tsx`.
-- Added release-notes style summary for this unit: `spec/006-event-log-and-state-view/user-state.md`.
+- Added Postgres-backed event storage to API and a materialized `/state` view.
+	- Projection/reducer: `services/api/app/events.py`
+	- HTTP routes: `services/api/app/routes/events.py`
+- Migrated schema management to Alembic migrations (no runtime DDL):
+	- `services/api/alembic.ini`, `services/api/alembic/env.py`
+	- Initial migration creates `events` table + indexes: `services/api/alembic/versions/0001_create_events_table.py`
+	- API runs `alembic upgrade head` on container start: `services/api/entrypoint.sh`
+- Migrated runtime DB access away from raw SQL to SQLAlchemy async with a repository/UoW pattern:
+	- Session/engine: `services/api/app/db.py`
+	- ORM model: `services/api/app/models.py`
+	- Repository: `services/api/app/repositories/events_repo.py`
+	- Unit of Work + deps: `services/api/app/uow.py`, `services/api/app/deps.py`
+- Persisted websocket chat messages as events:
+	- `ChatMessageSent` is appended for both user + assistant messages via `services/api/app/services/chat_service.py`.
 
 ## DB schema
 
-API initializes this table on startup (minimal init strategy, no migrations in this unit):
+Alembic manages this schema (initial migration):
 
 - `events(id uuid pk, ts timestamptz, type text, session_id text, payload jsonb)`
+- indexes: `events_ts_idx`, `events_type_idx`
 
 ## Verification
 
 Commands:
 
 - `docker compose up --build -d`
+- `docker compose run --rm api alembic upgrade head`
 - `curl -s http://localhost:8000/state`
 - `curl -s -X POST http://localhost:8000/events -H 'content-type: application/json' -d '{"type":"UserOnboarded","payload":{"goal":"hypertrophy"}}'`
 - `curl -s http://localhost:8000/state`
@@ -33,4 +41,4 @@ Expected:
 
 Notes:
 
-- `asyncpg` jsonb binding expects JSON to be passed as a string by default; the implementation stores `payload` as `json.dumps(payload)` and uses `$5::jsonb` in SQL.
+- Event persistence is now via SQLAlchemy async ORM (no raw SQL required in runtime handlers).

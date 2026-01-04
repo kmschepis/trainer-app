@@ -1,11 +1,12 @@
 import logging
 import os
 import time
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.responses import Response
@@ -34,38 +35,7 @@ def _load_system_prompt() -> str:
             "Ask clarifying questions when needed."
         )
 
-
-def _stub_coach_reply(message: str) -> str:
-    text = message.strip().lower()
-    if not text:
-        return "Tell me what you want to train today."
-
-    if any(w in text for w in ["hello", "hi", "hey", "yo"]):
-        return "Hey. What are we training today — and what equipment do you have?"
-
-    if "leg" in text:
-        return (
-            "Leg day. Quick setup questions: do you have a barbell, rack, and plates? "
-            "Any knee/back issues?"
-        )
-    if "push" in text or "bench" in text or "chest" in text:
-        return (
-            "Push day. Do you have a bench + barbell/dumbbells? "
-            "Any shoulder pain or limitations?"
-        )
-    if "pull" in text or "back" in text:
-        return (
-            "Pull day. What do you have available (pull-up bar, row machine, dumbbells)? "
-            "Any elbow/bicep issues?"
-        )
-
-    return (
-        "Got it. Give me: (1) goal (strength/hypertrophy/fat loss), "
-        "(2) experience level, (3) time available today, and (4) equipment."
-    )
-
-
-def _openai_compatible_reply(*, session_id: str, message: str) -> str:
+def _openai_compatible_reply(*, session_id: str, message: str, context: Optional[Dict[str, Any]]) -> str:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     model = os.getenv("OPENAI_MODEL", "").strip()
     base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
@@ -75,12 +45,19 @@ def _openai_compatible_reply(*, session_id: str, message: str) -> str:
 
     system = _load_system_prompt()
 
+    messages: List[Dict[str, str]] = [{"role": "system", "content": system}]
+    if context:
+        messages.append(
+            {
+                "role": "system",
+                "content": "Context (JSON):\n" + json.dumps(context, ensure_ascii=False),
+            }
+        )
+    messages.append({"role": "user", "content": message})
+
     payload = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": message},
-        ],
+        "messages": messages,
         "temperature": 0.6,
     }
 
@@ -127,6 +104,7 @@ respond_duration_seconds = Histogram(
 class RespondRequest(BaseModel):
     sessionId: str
     message: str
+    context: Optional[Dict[str, Any]] = None
 
 
 class RespondResponse(BaseModel):
@@ -159,26 +137,27 @@ async def prometheus_http_metrics(request, call_next):
 
 @app.post("/respond", response_model=RespondResponse)
 def respond(payload: RespondRequest) -> RespondResponse:
-    # Agent can run in stub mode (default) or LLM-backed mode.
+    # Always LLM-backed. If the LLM is not configured, return an error.
     started = time.perf_counter()
     respond_calls_total.inc()
 
-    llm_backend = os.getenv("LLM_BACKEND", "stub").strip().lower()
-    text: str
-    error: Optional[str] = None
     try:
-        if llm_backend in {"openai", "openai_compatible"}:
-            text = _openai_compatible_reply(session_id=payload.sessionId, message=payload.message)
-        else:
-            text = _stub_coach_reply(payload.message)
+        text = _openai_compatible_reply(
+            session_id=payload.sessionId,
+            message=payload.message,
+            context=payload.context,
+        )
     except Exception as exc:
-        error = str(exc)
         logger.exception("agent_respond_failed", extra={"sessionId": payload.sessionId})
-        text = _stub_coach_reply(payload.message)
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Agent failed to generate a response. "
+                "Check OPENAI_API_KEY / OPENAI_MODEL (and optionally OPENAI_BASE_URL). "
+                f"Error: {exc}"
+            ),
+        )
 
     respond_duration_seconds.observe(time.perf_counter() - started)
-    if error:
-        logger.info("responded_with_fallback", extra={"sessionId": payload.sessionId})
-    else:
-        logger.info("responded", extra={"sessionId": payload.sessionId})
+    logger.info("responded", extra={"sessionId": payload.sessionId})
     return RespondResponse(text=text, a2uiActions=[])

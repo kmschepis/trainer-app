@@ -1,49 +1,54 @@
 import logging
 import os
-from typing import Any, Optional
+from typing import Optional
 
-import asyncpg
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 logger = logging.getLogger("trainer2.api.db")
 
 
-async def init_db(app: FastAPI) -> None:
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
+def _async_database_url() -> str:
+    url = os.getenv("DATABASE_URL", "").strip()
+    if not url:
         raise RuntimeError("DATABASE_URL is required")
 
-    pool = await asyncpg.create_pool(dsn=database_url, min_size=1, max_size=5)
-    app.state.db_pool = pool
+    # Prefer asyncpg for runtime.
+    if url.startswith("postgresql+asyncpg://"):
+        return url
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
 
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS events (
-              id uuid PRIMARY KEY,
-              ts timestamptz NOT NULL,
-              type text NOT NULL,
-              session_id text NULL,
-              payload jsonb NOT NULL
-            );
-            """
-        )
-        await conn.execute("CREATE INDEX IF NOT EXISTS events_ts_idx ON events (ts);")
-        await conn.execute("CREATE INDEX IF NOT EXISTS events_type_idx ON events (type);")
+
+async def init_db(app: FastAPI) -> None:
+    engine: AsyncEngine = create_async_engine(
+        _async_database_url(),
+        pool_size=5,
+        max_overflow=0,
+        pool_pre_ping=True,
+    )
+    app.state.db_engine = engine
+    app.state.db_sessionmaker = async_sessionmaker(
+        engine,
+        expire_on_commit=False,
+        class_=AsyncSession,
+    )
 
     logger.info("db initialized")
 
 
 async def close_db(app: FastAPI) -> None:
-    pool: Optional[asyncpg.Pool] = getattr(app.state, "db_pool", None)
-    if pool is not None:
-        await pool.close()
-        app.state.db_pool = None
-        logger.info("db pool closed")
+    engine: Optional[AsyncEngine] = getattr(app.state, "db_engine", None)
+    if engine is not None:
+        await engine.dispose()
+        app.state.db_engine = None
+        app.state.db_sessionmaker = None
+        logger.info("db engine disposed")
 
 
-def get_pool(app: FastAPI) -> asyncpg.Pool:
-    pool = getattr(app.state, "db_pool", None)
-    if pool is None:
-        raise RuntimeError("db pool is not initialized")
-    return pool
+def get_sessionmaker(app: FastAPI) -> async_sessionmaker[AsyncSession]:
+    sessionmaker = getattr(app.state, "db_sessionmaker", None)
+    if sessionmaker is None:
+        raise RuntimeError("db sessionmaker is not initialized")
+    return sessionmaker

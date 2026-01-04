@@ -6,21 +6,30 @@ Phase 0 (walking skeleton): Docker Compose brings up Postgres + FastAPI + Next.j
 
 - `docker compose up --build`
 
-## Chat backends (stub vs LLM)
+## Database migrations (Alembic)
 
-By default, websocket chat replies come from a built-in stub coach (no LLM).
+The API uses Alembic for schema migrations.
 
-To route websocket chat through the agent service:
+On `docker compose up`, the API container automatically runs `alembic upgrade head` before starting.
 
-- Set `CHAT_BACKEND=http`
+- Apply migrations: `docker compose run --rm api alembic upgrade head`
+- Create a new migration (after model changes): `docker compose run --rm api alembic revision -m "..." --autogenerate`
 
-To enable an OpenAI-compatible LLM behind the agent:
+For a destructive reset (wipe DB volume + re-migrate), see [.dev/scripts/README.md](.dev/scripts/README.md).
 
-- Set `LLM_BACKEND=openai_compatible`
-- Set `OPENAI_API_KEY` and `OPENAI_MODEL`
-- Optionally set `OPENAI_BASE_URL` (defaults to `https://api.openai.com/v1`)
+## Chat (how it works)
 
-All variables are documented in `.env.example` (copy to `.env` for local overrides).
+The web app connects to the API websocket (`/realtime`). When you send a chat message:
+
+- Browser (Next.js) -> API websocket `/realtime`
+- API -> agent service `POST /respond`
+- Agent -> OpenAI-compatible Chat Completions API
+
+To run chat, set these in `.env` (see `.env.example`):
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- Optional: `OPENAI_BASE_URL` (defaults to `https://api.openai.com/v1`)
 
 ## Shortcuts
 

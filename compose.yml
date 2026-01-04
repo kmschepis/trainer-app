@@ -18,7 +18,6 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://trainer:trainer@db:5432/trainer}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       AGENT_BASE_URL: ${AGENT_BASE_URL:-http://agent:9000}
-      CHAT_BACKEND: ${CHAT_BACKEND:-stub}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_API:-trainer2-api}
     ports:
@@ -34,7 +33,6 @@ services:
       API_BASE_URL: ${API_BASE_URL:-http://api:8000}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_AGENT:-trainer2-agent}
-      LLM_BACKEND: ${LLM_BACKEND:-stub}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}

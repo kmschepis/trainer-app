@@ -18,5 +18,5 @@ The product spec’s “single source of truth” is an event stream (e.g. `User
 
 ## Non-goals (this unit)
 
-- Auth, multi-user support, migrations beyond what’s required to store events.
+- Auth, multi-user support, advanced relational modeling beyond the event log.
 - Full event taxonomy (only what’s needed for subsequent units).
