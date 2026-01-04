@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-type Health = { status: string };
-type ChatMessage = { role: "user" | "assistant"; text: string };
-type A2UIAction = { type: string; [k: string]: unknown };
+import { ChatComposer } from "./components/ChatComposer";
+import { ChatHeader } from "./components/ChatHeader";
+import { ChatMessages } from "./components/ChatMessages";
+import { OnboardingDrawer } from "./components/OnboardingDrawer";
+import { Toast } from "./components/Toast";
+import { defaultOnboardingDraft, mergeOnboardingDraft } from "./lib/onboarding";
+import type { A2UIAction, ChatMessage, OnboardingDraft } from "./types";
 
 function newRequestId(): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -23,25 +27,41 @@ export default function HomePage() {
     []
   );
 
-  const [apiHealth, setApiHealth] = useState<Health | null>(null);
   const [wsState, setWsState] = useState<string>("disconnected");
   const [sessionId, setSessionId] = useState<string>("");
   const [input, setInput] = useState<string>("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [actions, setActions] = useState<A2UIAction[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      role: "assistant",
+      text: "Coach here. Tell me what you want to train today.",
+    },
+  ]);
+  const [isSending, setIsSending] = useState<boolean>(false);
+
+  const [hasProfile, setHasProfile] = useState<boolean>(false);
+  const [toast, setToast] = useState<string>("");
+
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
+  const [onboardingDraft, setOnboardingDraft] = useState<OnboardingDraft>(
+    defaultOnboardingDraft()
+  );
 
   const wsRef = useRef<WebSocket | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`${apiBaseUrl}/health`)
+    fetch(`${apiBaseUrl}/state`)
       .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled) setApiHealth(data);
+      .then((data: unknown) => {
+        if (cancelled) return;
+        const snapshot = (data as { snapshot?: { profile?: unknown } })?.snapshot;
+        setHasProfile(Boolean(snapshot?.profile));
       })
       .catch(() => {
-        if (!cancelled) setApiHealth({ status: "error" });
+        if (cancelled) return;
+        setHasProfile(false);
       });
 
     const ws = new WebSocket(wsUrl);
@@ -61,11 +81,39 @@ export default function HomePage() {
           return;
         }
         if (type === "chat.message" && typeof payload.message === "string") {
-          setMessages((prev) => [...prev, { role: "assistant", text: payload.message }]);
+          setIsSending(false);
+          setMessages((prev: ChatMessage[]) => [
+            ...prev,
+            { role: "assistant", text: payload.message },
+          ]);
           return;
         }
+
         if (type === "a2ui.action" && payload.action && typeof payload.action === "object") {
-          setActions((prev) => [...prev, payload.action as A2UIAction]);
+          const action = payload.action as A2UIAction;
+          if (action.type === "ui.onboarding.open") {
+            setIsOnboardingOpen(true);
+            if (action.draft) {
+              setOnboardingDraft((prev: OnboardingDraft) =>
+                mergeOnboardingDraft(prev, action.draft ?? {})
+              );
+            }
+            return;
+          }
+          if (action.type === "ui.onboarding.patch") {
+            setOnboardingDraft((prev: OnboardingDraft) =>
+              mergeOnboardingDraft(prev, action.patch ?? {})
+            );
+            return;
+          }
+          if (action.type === "ui.onboarding.close") {
+            setIsOnboardingOpen(false);
+            return;
+          }
+          if (action.type === "ui.toast") {
+            setToast(String(action.message ?? ""));
+            return;
+          }
           return;
         }
       } catch {
@@ -73,8 +121,14 @@ export default function HomePage() {
       }
     };
 
-    ws.onerror = () => setWsState("error");
-    ws.onclose = () => setWsState("closed");
+    ws.onerror = () => {
+      setIsSending(false);
+      setWsState("error");
+    };
+    ws.onclose = () => {
+      setIsSending(false);
+      setWsState("closed");
+    };
 
     return () => {
       cancelled = true;
@@ -83,80 +137,93 @@ export default function HomePage() {
     };
   }, [apiBaseUrl, wsUrl]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(""), 2500);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, isSending]);
+
   function sendChat() {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     const text = input.trim();
     if (!text) return;
 
-    setMessages((prev) => [...prev, { role: "user", text }]);
+    setMessages((prev: ChatMessage[]) => [...prev, { role: "user", text }]);
     setInput("");
+    setIsSending(true);
 
     ws.send(
       JSON.stringify({
         type: "chat.send",
         sessionId: sessionId || undefined,
         message: text,
+        context: {
+          hasProfile,
+          onboarding: {
+            open: isOnboardingOpen,
+            draft: onboardingDraft,
+          },
+        },
+        requestId: newRequestId(),
+      })
+    );
+  }
+
+  async function submitOnboarding() {
+    // UI-triggered submit. We tell the coach (agent) and include the form draft as context.
+    // The backend will persist `UserOnboarded` via an agent-driven action.
+    if (wsState !== "connected") return;
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+    setMessages((prev: ChatMessage[]) => [
+      ...prev,
+      { role: "user", text: "Submitted onboarding form for review." },
+    ]);
+    setIsSending(true);
+
+    ws.send(
+      JSON.stringify({
+        type: "chat.send",
+        sessionId: sessionId || undefined,
+        message: "ONBOARDING_SUBMIT",
+        context: {
+          hasProfile,
+          onboarding: {
+            open: true,
+            draft: onboardingDraft,
+            submit: true,
+          },
+        },
         requestId: newRequestId(),
       })
     );
   }
 
   return (
-    <main>
-      <h1>trainer2 — Phase 0/003 (WS ready)</h1>
-      <p>
-        API health: <strong>{apiHealth?.status ?? "loading"}</strong>
-      </p>
-      <p>
-        WS state: <strong>{wsState}</strong>
-      </p>
-      <p>
-        Session: <strong>{sessionId || "(none yet)"}</strong>
-      </p>
+    <main className="relative flex min-h-screen w-full items-center justify-center bg-black p-4">
+      <Toast message={toast} />
 
-      <div style={{ marginTop: 16, maxWidth: 720 }}>
-        <h2>Chat</h2>
-        <div
-          style={{
-            border: "1px solid #ddd",
-            padding: 12,
-            minHeight: 160,
-            marginBottom: 12,
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {messages.length === 0 ? (
-            <div style={{ color: "#666" }}>Send a message to test.</div>
-          ) : (
-            messages.map((m, idx) => (
-              <div key={idx} style={{ marginBottom: 8 }}>
-                <strong>{m.role}:</strong> {m.text}
-              </div>
-            ))
-          )}
-        </div>
-
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            style={{ flex: 1, padding: 8 }}
-            value={input}
-            placeholder="Type a message…"
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") sendChat();
-            }}
-          />
-          <button style={{ padding: "8px 12px" }} onClick={sendChat}>
-            Send
-          </button>
-        </div>
-
-        <h2 style={{ marginTop: 16 }}>A2UI actions (debug)</h2>
-        <pre style={{ border: "1px solid #eee", padding: 12, overflowX: "auto" }}>
-          {JSON.stringify(actions, null, 2)}
-        </pre>
-      </div>
+      <section className="relative flex h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-zinc-900 bg-zinc-950">
+        <ChatHeader wsState={wsState} sessionId={sessionId} hasProfile={hasProfile} />
+        <ChatMessages messages={messages} isSending={isSending} scrollRef={scrollRef} />
+        <ChatComposer wsState={wsState} input={input} setInput={setInput} onSend={sendChat} />
+      </section>
+      <OnboardingDrawer
+        open={isOnboardingOpen}
+        draft={onboardingDraft}
+        setDraft={setOnboardingDraft}
+        onClose={() => setIsOnboardingOpen(false)}
+        onSubmit={submitOnboarding}
+        submitDisabled={wsState !== "connected"}
+      />
     </main>
   );
 }

@@ -6,7 +6,7 @@ Create a minimal onboarding interview UI that produces an initial profile and pe
 
 ## Acceptance criteria
 
-- Web provides an onboarding form capturing the MVP fields (goals, experience, constraints, metrics, diet prefs, risk flags).
+- Web provides an onboarding interview experience (chat-first is acceptable) capturing the MVP fields (goals, experience, constraints, metrics, diet prefs, risk flags).
 - Submitting onboarding appends a `UserOnboarded` (or equivalent) event via the API.
 - `GET /state` reflects the onboarded profile.
 - The agent can be invoked after onboarding with the profile present in state.

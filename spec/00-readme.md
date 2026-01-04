@@ -31,10 +31,12 @@ When AI agents make changes for a unit:
 - `spec/003-websocket-ready-phase1/` — WS envelope + API→agent chat transport
 - `spec/004-observability-stack/` — metrics/logs/traces + Grafana
 - `spec/005-template-hardening/` — additional skeleton work to make this a reusable agentic-project template
-- `spec/006-event-log-and-state-view/` — append-only events + `GET /state` materialization
+- `spec/006-event-log-and-state-view/` — append-only event log + materialized UI state snapshot
 - `spec/007-onboarding-core-loop/` — onboarding form → events → state
 - `spec/008-agent-plan-generation/` — 1-week plan markdown generation + persistence
 - `spec/009-workout-canvas-and-set-logging/` — workout view + set logging events
 - `spec/010-weekly-review/` — weekly review page and basic derived metrics
 - `spec/011-plan-diff-proposals/` — plan diff propose/accept/deny (no silent edits)
 - `spec/012-fatigue-analytics/` — fatigue math + readiness bands derived from events
+- `spec/014-chat-ui-coach-console/` — chat-first polished UI for local coach iteration
+- `spec/015-llm-agent-integration/` — wire agent service to a real LLM backend

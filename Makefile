@@ -1,4 +1,4 @@
-.PHONY: help build up down restart ps logs config check web-lint web-build py-lint py-compile new-branch commit-new-branch tag
+.PHONY: help build up run down restart ps logs config check web-lint web-build py-lint py-compile new-branch commit-new-branch tag
 
 # Usage:
 #   make help
@@ -11,6 +11,7 @@ help:
 	@echo "Targets:"
 	@echo "  build              Build all docker images"
 	@echo "  up                 Start stack (build + detached)"
+	@echo "  run                Alias for up"
 	@echo "  down               Stop stack"
 	@echo "  restart            Restart stack"
 	@echo "  ps                 Show container status"
@@ -26,6 +27,8 @@ build:
 
 up:
 	docker compose -f compose.yml up --build -d
+
+run: up
 
 down:
 	docker compose -f compose.yml down

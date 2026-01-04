@@ -25,6 +25,7 @@ Ensure work is broken into measurable units and that each unit’s spec docs sta
   - `00-readme.md` (user story + acceptance criteria)
   - `01-plan.md` (detailed execution plan)
   - `02-execution.md` (running log)
+   - `user-state.md` (release-notes style snapshot)
 - Updated `spec/00-readme.md` “Current units” list
 
 ## Workflow
@@ -41,6 +42,10 @@ Ensure work is broken into measurable units and that each unit’s spec docs sta
 5. After coding:
    - Update acceptance criteria if reality changed.
    - Update `spec/00-readme.md` “Current units”.
+   - Create or update `user-state.md` using the strict format:
+     - exactly 3 headers
+     - under each header: at most 3 bullets
+     - each bullet is exactly one sentence describing current behavior
 
 ## Edge cases
 

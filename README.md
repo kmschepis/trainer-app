@@ -6,6 +6,22 @@ Phase 0 (walking skeleton): Docker Compose brings up Postgres + FastAPI + Next.j
 
 - `docker compose up --build`
 
+## Chat backends (stub vs LLM)
+
+By default, websocket chat replies come from a built-in stub coach (no LLM).
+
+To route websocket chat through the agent service:
+
+- Set `CHAT_BACKEND=http`
+
+To enable an OpenAI-compatible LLM behind the agent:
+
+- Set `LLM_BACKEND=openai_compatible`
+- Set `OPENAI_API_KEY` and `OPENAI_MODEL`
+- Optionally set `OPENAI_BASE_URL` (defaults to `https://api.openai.com/v1`)
+
+All variables are documented in `.env.example` (copy to `.env` for local overrides).
+
 ## Shortcuts
 
 - `make help`

@@ -39,12 +39,20 @@ Observability:
 	- `00-readme.md`: user story + acceptance criteria (A/C)
 	- `01-plan.md`: detailed plan
 	- `02-execution.md`: running log of actual work performed
+	- `user-state.md`: release-notes style snapshot of current app functionality
 
 When you change code:
 
 - Identify the active unit folder and update its `02-execution.md` in the same session.
 - Keep `00-readme.md` acceptance criteria accurate.
+- When the unit’s work is complete, create or update that unit’s `user-state.md`.
 - If work doesn’t fit an existing unit, create a new numbered unit folder and start `00/01/02`.
+
+`user-state.md` format (strict):
+
+- Exactly 3 headers.
+- Under each header: at most 3 bullets.
+- Each bullet is exactly one sentence describing current behavior (release notes).
 
 ## Conventions
 
