@@ -4,7 +4,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Optional
+from typing import Any, Dict
 
 import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -12,7 +12,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.clients.agent_client import AgentClient
 from app.db import get_sessionmaker
 from app.metrics import agent_call_duration_seconds, agent_calls_total, ws_messages_total
-from app.protocol import ClientChatSend, ClientPing, parse_client_envelope
+from app.protocol import parse_client_envelope
 from app.repositories.events_repo import EventsRepository
 from app.services.chat_service import ChatService
 from app.services.events_service import EventsService
@@ -28,7 +28,6 @@ async def realtime(ws: WebSocket) -> None:
 
     agent_base_url = os.getenv("AGENT_BASE_URL", "http://agent:9000")
 
-    session_id: Optional[str] = None
     async with httpx.AsyncClient(timeout=10.0) as http:
         agent = AgentClient(base_url=agent_base_url, http=http)
         events = EventsService(sessionmaker=get_sessionmaker(ws.app), repo=EventsRepository())
@@ -41,31 +40,38 @@ async def realtime(ws: WebSocket) -> None:
                 try:
                     msg = parse_client_envelope(raw)
                 except ValueError as exc:
-                    await ws.send_json({"type": "error", "message": str(exc)})
-                    continue
-
-                if isinstance(msg, ClientPing):
-                    ws_messages_total.labels(type="ping").inc()
-                    await ws.send_json({"type": "pong", "requestId": msg.request_id})
-                    continue
-
-                ws_messages_total.labels(type="chat.send").inc()
-
-                request_id = msg.request_id
-                if msg.session_id:
-                    session_id = msg.session_id
-                if not session_id:
-                    session_id = str(uuid.uuid4())
                     await ws.send_json(
-                        {"type": "session.created", "sessionId": session_id, "requestId": request_id}
+                        {
+                            "type": "RUN_ERROR",
+                            "message": str(exc),
+                        }
                     )
+                    continue
+
+                ws_messages_total.labels(type="run").inc()
+
+                thread_id = msg.thread_id
+                run_id = msg.run_id
+
+                await ws.send_json(
+                    {
+                        "type": "RUN_STARTED",
+                        "threadId": thread_id,
+                        "runId": run_id,
+                        "parentRunId": msg.parent_run_id,
+                    }
+                )
 
                 try:
                     started = time.perf_counter()
-                    text, a2ui_actions = await chat.handle_user_message(
-                        session_id=session_id,
+                    ui_context: Dict[str, Any] | None = None
+                    if msg.forwarded_props and isinstance(msg.forwarded_props.get("uiContext"), dict):
+                        ui_context = msg.forwarded_props.get("uiContext")
+
+                    text, ui_actions = await chat.handle_user_message(
+                        session_id=thread_id,
                         message=msg.message,
-                        context=msg.context,
+                        context=ui_context,
                     )
                     agent_calls_total.labels(status="success").inc()
                     agent_call_duration_seconds.observe(time.perf_counter() - started)
@@ -73,37 +79,44 @@ async def realtime(ws: WebSocket) -> None:
                     agent_calls_total.labels(status="error").inc()
                     await ws.send_json(
                         {
-                            "type": "error",
-                            "sessionId": session_id,
-                            "requestId": request_id,
+                            "type": "RUN_ERROR",
+                            "threadId": thread_id,
+                            "runId": run_id,
                             "message": f"chat backend failed: {exc}",
                         }
                     )
                     logger.exception(
                         "chat backend failed",
-                        extra={"sessionId": session_id, "requestId": request_id},
+                        extra={"threadId": thread_id, "runId": run_id},
                     )
                     continue
 
+                message_id = str(uuid.uuid4())
                 await ws.send_json(
                     {
-                        "type": "chat.message",
-                        "sessionId": session_id,
+                        "type": "TEXT_MESSAGE_CHUNK",
+                        "messageId": message_id,
                         "role": "assistant",
-                        "message": text,
-                        "requestId": request_id,
+                        "delta": text,
                     }
                 )
 
-                if isinstance(a2ui_actions, list) and a2ui_actions:
-                    for action in a2ui_actions:
+                if isinstance(ui_actions, list) and ui_actions:
+                    for action in ui_actions:
                         await ws.send_json(
                             {
-                                "type": "a2ui.action",
-                                "sessionId": session_id,
-                                "action": action,
-                                "requestId": request_id,
+                                "type": "CUSTOM",
+                                "name": "ui.action",
+                                "value": action,
                             }
                         )
+
+                await ws.send_json(
+                    {
+                        "type": "RUN_FINISHED",
+                        "threadId": thread_id,
+                        "runId": run_id,
+                    }
+                )
         except WebSocketDisconnect:
             return

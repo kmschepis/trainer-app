@@ -1,12 +1,21 @@
 # 007 — Plan
 
-1. Define onboarding schema (shared shape, web→API event payload).
-2. Implement onboarding interview flow (chat-first UI is acceptable; form is optional).
-3. Persist onboarding (preferred):
-   - agent requests a constrained domain tool (e.g. `profile.save(...)`)
-   - API validates and appends `UserOnboarded`
-   - (fallback during early dev: UI can call `POST /events` directly)
-4. Update state projection (unit 006) to include profile fields.
-5. Verify:
-   - complete onboarding interview
-   - confirm profile appears in `GET /state`
+1. Confirm the onboarding contract (minimal fields + meaning).
+   - Reuse the existing web onboarding draft shape as the initial payload.
+2. Define the first constrained domain tool:
+   - `profile.save(profile)`
+   - Executed by the API (system boundary), persists a `UserOnboarded` event.
+3. Teach the agent to drive onboarding using chat + A2UI:
+   - If `context.hasProfile` is false, request the onboarding drawer open via `a2uiActions`.
+   - If user submits (`message == "ONBOARDING_SUBMIT"` and `context.onboarding.submit == true`):
+     - validate draft at a high level (ask for missing fields),
+     - otherwise request the tool call `profile.save`.
+4. Implement tool execution in the API websocket flow:
+   - Parse tool calls returned by the agent.
+   - Validate + execute `profile.save` (append `UserOnboarded`).
+   - Return chat confirmation + A2UI actions (toast + close drawer).
+5. Verify end-to-end:
+   - Fresh DB: chat triggers onboarding drawer
+   - Submit onboarding: `UserOnboarded` event exists
+   - `GET /state` shows `snapshot.profile`
+   - Subsequent chat sees `context.hasProfile == true`

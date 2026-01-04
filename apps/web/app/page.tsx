@@ -17,6 +17,10 @@ function newRequestId(): string {
   return String(Date.now());
 }
 
+function newId(): string {
+  return newRequestId();
+}
+
 export default function HomePage() {
   const apiBaseUrl = useMemo(
     () => process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000",
@@ -28,7 +32,7 @@ export default function HomePage() {
   );
 
   const [wsState, setWsState] = useState<string>("disconnected");
-  const [sessionId, setSessionId] = useState<string>("");
+  const [threadId, setThreadId] = useState<string>("");
   const [input, setInput] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -68,7 +72,6 @@ export default function HomePage() {
     wsRef.current = ws;
     ws.onopen = () => {
       setWsState("connected");
-      ws.send(JSON.stringify({ type: "ping", requestId: newRequestId() }));
     };
 
     ws.onmessage = (event) => {
@@ -76,21 +79,31 @@ export default function HomePage() {
       try {
         const payload = JSON.parse(raw) as { type?: string; [k: string]: unknown };
         const type = payload.type;
-        if (type === "session.created" && typeof payload.sessionId === "string") {
-          setSessionId(payload.sessionId);
-          return;
-        }
-        if (type === "chat.message" && typeof payload.message === "string") {
-          setIsSending(false);
-          setMessages((prev: ChatMessage[]) => [
-            ...prev,
-            { role: "assistant", text: payload.message },
-          ]);
+        if (type === "RUN_STARTED") {
+          setIsSending(true);
           return;
         }
 
-        if (type === "a2ui.action" && payload.action && typeof payload.action === "object") {
-          const action = payload.action as A2UIAction;
+        if (type === "RUN_FINISHED") {
+          setIsSending(false);
+          return;
+        }
+
+        if (type === "RUN_ERROR") {
+          setIsSending(false);
+          const msg = typeof payload.message === "string" ? payload.message : "Run failed";
+          setToast(msg);
+          return;
+        }
+
+        if (type === "TEXT_MESSAGE_CHUNK" && typeof payload.delta === "string") {
+          setIsSending(false);
+          setMessages((prev: ChatMessage[]) => [...prev, { role: "assistant", text: payload.delta }]);
+          return;
+        }
+
+        if (type === "CUSTOM" && payload.name === "ui.action" && payload.value && typeof payload.value === "object") {
+          const action = payload.value as A2UIAction;
           if (action.type === "ui.onboarding.open") {
             setIsOnboardingOpen(true);
             if (action.draft) {
@@ -159,19 +172,26 @@ export default function HomePage() {
     setInput("");
     setIsSending(true);
 
+    const nextThreadId = threadId || newId();
+    if (!threadId) setThreadId(nextThreadId);
+
+    const uiContext = {
+      hasProfile,
+      onboarding: {
+        open: isOnboardingOpen,
+        draft: onboardingDraft,
+      },
+    };
+
     ws.send(
       JSON.stringify({
-        type: "chat.send",
-        sessionId: sessionId || undefined,
-        message: text,
-        context: {
-          hasProfile,
-          onboarding: {
-            open: isOnboardingOpen,
-            draft: onboardingDraft,
-          },
-        },
-        requestId: newRequestId(),
+        threadId: nextThreadId,
+        runId: newId(),
+        state: {},
+        messages: [{ id: newId(), role: "user", content: text }],
+        tools: [],
+        context: [{ description: "uiContext", value: JSON.stringify(uiContext) }],
+        forwardedProps: { uiContext },
       })
     );
   }
@@ -189,20 +209,27 @@ export default function HomePage() {
     ]);
     setIsSending(true);
 
+    const nextThreadId = threadId || newId();
+    if (!threadId) setThreadId(nextThreadId);
+
+    const uiContext = {
+      hasProfile,
+      onboarding: {
+        open: true,
+        draft: onboardingDraft,
+        submit: true,
+      },
+    };
+
     ws.send(
       JSON.stringify({
-        type: "chat.send",
-        sessionId: sessionId || undefined,
-        message: "ONBOARDING_SUBMIT",
-        context: {
-          hasProfile,
-          onboarding: {
-            open: true,
-            draft: onboardingDraft,
-            submit: true,
-          },
-        },
-        requestId: newRequestId(),
+        threadId: nextThreadId,
+        runId: newId(),
+        state: {},
+        messages: [{ id: newId(), role: "user", content: "ONBOARDING_SUBMIT" }],
+        tools: [],
+        context: [{ description: "uiContext", value: JSON.stringify(uiContext) }],
+        forwardedProps: { uiContext },
       })
     );
   }
@@ -212,7 +239,7 @@ export default function HomePage() {
       <Toast message={toast} />
 
       <section className="relative flex h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-zinc-900 bg-zinc-950">
-        <ChatHeader wsState={wsState} sessionId={sessionId} hasProfile={hasProfile} />
+        <ChatHeader wsState={wsState} sessionId={threadId} hasProfile={hasProfile} />
         <ChatMessages messages={messages} isSending={isSending} scrollRef={scrollRef} />
         <ChatComposer wsState={wsState} input={input} setInput={setInput} onSend={sendChat} />
       </section>

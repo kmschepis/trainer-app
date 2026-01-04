@@ -6,26 +6,26 @@ from typing import Any, Dict, Optional
 
 
 @dataclass(frozen=True)
-class ClientChatSend:
-    request_id: Optional[str]
-    session_id: Optional[str]
+class ClientRunAgentInput:
+    """Minimal subset of AG-UI RunAgentInput for our WebSocket transport.
+
+    We treat each incoming message as a new run within a thread.
+    """
+
+    thread_id: str
+    run_id: str
+    parent_run_id: Optional[str]
     message: str
-    context: Optional[Dict[str, Any]]
+    forwarded_props: Optional[Dict[str, Any]]
 
 
-@dataclass(frozen=True)
-class ClientPing:
-    request_id: Optional[str]
-
-
-def parse_client_envelope(raw: str) -> ClientPing | ClientChatSend:
+def parse_client_envelope(raw: str) -> ClientRunAgentInput:
     """Parse/validate inbound websocket messages.
 
-    Keeps FastAPI/WebSocket code focused on orchestration.
+    We accept an AG-UI-compatible RunAgentInput shape over WebSockets.
 
-    Expected shapes:
-    - {"type":"ping","requestId": "..."}
-    - {"type":"chat.send","sessionId":"...","message":"...","context":{...},"requestId":"..."}
+    Expected minimal shape:
+    - {"threadId": "...", "runId": "...", "messages": [{"role":"user","content":"..."}], "forwardedProps": {...}}
 
     Raises ValueError with a user-friendly error message.
     """
@@ -38,32 +38,39 @@ def parse_client_envelope(raw: str) -> ClientPing | ClientChatSend:
     if not isinstance(payload, dict):
         raise ValueError("invalid payload")
 
-    msg_type = payload.get("type")
-    request_id = payload.get("requestId")
-    if request_id is not None and not isinstance(request_id, str):
-        request_id = None
+    thread_id = payload.get("threadId")
+    if not isinstance(thread_id, str) or not thread_id.strip():
+        raise ValueError("threadId must be a non-empty string")
 
-    if msg_type == "ping":
-        return ClientPing(request_id=request_id)
+    run_id = payload.get("runId")
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise ValueError("runId must be a non-empty string")
 
-    if msg_type != "chat.send":
-        raise ValueError(f"unsupported type: {msg_type}")
+    parent_run_id = payload.get("parentRunId")
+    if parent_run_id is not None and not isinstance(parent_run_id, str):
+        parent_run_id = None
 
-    session_id = payload.get("sessionId")
-    if session_id is not None and not isinstance(session_id, str):
-        session_id = None
+    messages = payload.get("messages")
+    if not isinstance(messages, list) or not messages:
+        raise ValueError("messages must be a non-empty array")
 
-    message = payload.get("message")
+    last = messages[-1]
+    if not isinstance(last, dict):
+        raise ValueError("last message must be an object")
+    if last.get("role") != "user":
+        raise ValueError("last message role must be 'user'")
+    message = last.get("content")
     if not isinstance(message, str) or not message.strip():
-        raise ValueError("message must be a non-empty string")
+        raise ValueError("last message content must be a non-empty string")
 
-    context = payload.get("context")
-    if context is not None and not isinstance(context, dict):
-        context = None
+    forwarded_props = payload.get("forwardedProps")
+    if forwarded_props is not None and not isinstance(forwarded_props, dict):
+        forwarded_props = None
 
-    return ClientChatSend(
-        request_id=request_id,
-        session_id=session_id,
+    return ClientRunAgentInput(
+        thread_id=thread_id,
+        run_id=run_id,
+        parent_run_id=parent_run_id,
         message=message,
-        context=context,
+        forwarded_props=forwarded_props,
     )
