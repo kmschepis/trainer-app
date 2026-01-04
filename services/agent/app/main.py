@@ -4,7 +4,7 @@ import time
 from typing import Any, Dict, List
 
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.responses import Response
 
@@ -44,7 +44,7 @@ class RespondRequest(BaseModel):
 
 class RespondResponse(BaseModel):
     text: str
-    a2uiActions: List[Dict[str, Any]] = []
+    a2uiActions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 @app.get("/health")

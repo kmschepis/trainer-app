@@ -6,6 +6,17 @@ Phase 0 (walking skeleton): Docker Compose brings up Postgres + FastAPI + Next.j
 
 - `docker compose up --build`
 
+## Shortcuts
+
+- `make help`
+- `make build`
+- `make check`
+
+## Template versioning
+
+- This repo is intended to be taggable as a template release.
+- See `git-cheatsheet.md` for the exact commands (e.g. tagging the current commit as `template1`).
+
 ## Endpoints
 
 - Web: http://localhost:3000
