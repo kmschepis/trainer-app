@@ -5,7 +5,7 @@ This repository uses **spec-driven development**.
 ## Folder rules
 
 - `spec/` contains **only Markdown files** and **numbered unit folders**.
-- Each unit of work lives in a numbered folder: `spec/NNN - short name/`.
+- Each unit of work lives in a numbered folder: `spec/NNN-kebab-case/` (**strict: no spaces**).
 - Every folder (including `spec/` itself) must contain a `00-readme.md`.
 
 ## Per-unit document set
@@ -28,3 +28,6 @@ When AI agents make changes for a unit:
 
 - `spec/001-init/` — initial product/architecture spec
 - `spec/002-phase0-walking-skeleton/` — Docker Compose + boot checks
+- `spec/003-websocket-ready-phase1/` — WS envelope + API→agent chat transport
+- `spec/004-observability-stack/` — metrics/logs/traces + Grafana
+- `spec/005-template-hardening/` — additional skeleton work to make this a reusable agentic-project template

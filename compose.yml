@@ -17,20 +17,27 @@ services:
       # Not used yet in Phase 0, but reserved.
       DATABASE_URL: postgresql://trainer:trainer@db:5432/trainer
       CORS_ORIGINS: http://localhost:3000
+      AGENT_BASE_URL: http://agent:9000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: trainer2-api
     ports:
       - "8000:8000"
     depends_on:
       - db
+      - otel-collector
 
   agent:
     build:
       context: ./services/agent
     environment:
       API_BASE_URL: http://api:8000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: trainer2-agent
     ports:
       - "9000:9000"
     depends_on:
       - api
+      - otel-collector
 
   web:
     build:
@@ -43,5 +50,64 @@ services:
     depends_on:
       - api
 
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./infra/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./infra/observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    user: "0"
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./infra/observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo_data:/tmp/tempo
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.113.0
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./infra/observability/otel-collector/config.yml:/etc/otelcol/config.yml:ro
+    ports:
+      - "4319:4318"
+    depends_on:
+      - tempo
+      - loki
+
 volumes:
   db_data:
+  grafana_data:
+  loki_data:
+  tempo_data:

@@ -13,6 +13,10 @@
 - `services/agent/` — placeholder service that just boots (`GET /health`).
 - `spec/` — **Markdown-only specs** and numbered work units.
 
+## Skills
+
+- Reusable repo skills live in `.github/skills/`.
+
 ## Local dev (authoritative)
 
 - Start: `docker compose up --build -d`
@@ -22,9 +26,12 @@
 - API: `http://localhost:8000/health`
 - Agent: `http://localhost:9000/health`
 
-## Spec-driven workflow (must follow)
+Observability:
 
-The `spec/` folder is the source of truth for work.
+- Grafana: `http://localhost:3001` (admin/admin)
+- Prometheus: `http://localhost:9090`
+- API metrics: `http://localhost:8000/metrics`
+- Agent metrics: `http://localhost:9000/metrics`
 
 - Each work unit lives in `spec/NNN-short-name/` (strict: no spaces).
 - Each folder (including `spec/`) must contain a `00-readme.md`.
