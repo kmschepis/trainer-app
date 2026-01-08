@@ -14,7 +14,6 @@ import type { ChatMessage } from "../types";
 export function CoachClient() {
   const { data: session } = useSession();
   const idToken = (session as unknown as { idToken?: string } | null)?.idToken;
-  const sessionEmail = session?.user?.email ?? "";
 
   const wsUrl = useMemo(
     () => process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/realtime",
@@ -22,13 +21,10 @@ export function CoachClient() {
   );
   const [input, setInput] = useState<string>("");
 
-  const threadStorageKey = useMemo(() => {
-    const keyPart = sessionEmail || "default";
-    return `trainer2.threadId.${keyPart}`;
-  }, [sessionEmail]);
-
-  const { wsState, threadId, messages, isSending, substatus, scrollRef, sendUserMessage } =
-    useCoachChat({ idToken, wsUrl, threadStorageKey });
+  const { wsState, threadId, messages, isSending, substatus, scrollRef, sendUserMessage } = useCoachChat({
+    idToken,
+    wsUrl,
+  });
 
   function sendChat() {
     const normalized = input.replace(/\r\n/g, "\n").trimEnd();

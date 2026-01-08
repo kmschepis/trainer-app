@@ -20,10 +20,9 @@ function withQueryParam(url: string, key: string, value: string): string {
 type UseCoachChatArgs = {
   idToken: string | undefined;
   wsUrl: string;
-  threadStorageKey: string;
 };
 
-export function useCoachChat({ idToken, wsUrl, threadStorageKey }: UseCoachChatArgs) {
+export function useCoachChat({ idToken, wsUrl }: UseCoachChatArgs) {
   const [wsState, setWsState] = useState<WsState>("disconnected");
   const [threadId, setThreadId] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -40,14 +39,12 @@ export function useCoachChat({ idToken, wsUrl, threadStorageKey }: UseCoachChatA
   useEffect(() => {
     if (!idToken) return;
 
-    const storedThreadId = window.localStorage.getItem(threadStorageKey) || "";
-    const initialThreadId = storedThreadId || newRequestId();
+    // Always start a new conversation/thread on login.
+    const initialThreadId = newRequestId();
     threadIdRef.current = initialThreadId;
     setThreadId(initialThreadId);
 
-    if (!storedThreadId) {
-      window.localStorage.setItem(threadStorageKey, initialThreadId);
-    }
+    setMessages([]);
 
     setWsState("connecting");
     const authedWsUrl = withQueryParam(wsUrl, "token", idToken);
@@ -58,6 +55,7 @@ export function useCoachChat({ idToken, wsUrl, threadStorageKey }: UseCoachChatA
       setWsState("connected");
       setSubstatus("");
       setIsSending(false);
+      setMessages([]);
       runHasToolCallsRef.current = false;
       runHasAssistantTextRef.current = false;
     };
@@ -142,7 +140,7 @@ export function useCoachChat({ idToken, wsUrl, threadStorageKey }: UseCoachChatA
       ws.close();
       wsRef.current = null;
     };
-  }, [idToken, wsUrl, threadStorageKey]);
+  }, [idToken, wsUrl]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -167,7 +165,7 @@ export function useCoachChat({ idToken, wsUrl, threadStorageKey }: UseCoachChatA
     const payload: ClientRunEnvelope = {
       threadId: nextThreadId,
       runId: newRequestId(),
-      messages: [{ id: newRequestId(), role: "user", content: normalized }],
+      message: normalized,
       forwardedProps: {},
     };
 

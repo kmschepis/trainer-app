@@ -25,7 +25,7 @@ def parse_client_envelope(raw: str) -> ClientRunAgentInput:
     We accept an AG-UI-compatible RunAgentInput shape over WebSockets.
 
     Expected minimal shape:
-    - {"threadId": "...", "runId": "...", "messages": [{"role":"user","content":"..."}], "forwardedProps": {...}}
+    - {"threadId": "...", "runId": "...", "message": "...", "forwardedProps": {...}}
 
     Raises ValueError with a user-friendly error message.
     """
@@ -50,18 +50,9 @@ def parse_client_envelope(raw: str) -> ClientRunAgentInput:
     if parent_run_id is not None and not isinstance(parent_run_id, str):
         parent_run_id = None
 
-    messages = payload.get("messages")
-    if not isinstance(messages, list) or not messages:
-        raise ValueError("messages must be a non-empty array")
-
-    last = messages[-1]
-    if not isinstance(last, dict):
-        raise ValueError("last message must be an object")
-    if last.get("role") != "user":
-        raise ValueError("last message role must be 'user'")
-    message = last.get("content")
+    message = payload.get("message")
     if not isinstance(message, str) or not message.strip():
-        raise ValueError("last message content must be a non-empty string")
+        raise ValueError("message must be a non-empty string")
 
     forwarded_props = payload.get("forwardedProps")
     if forwarded_props is not None and not isinstance(forwarded_props, dict):

@@ -88,6 +88,7 @@ async def run(payload: RunRequest) -> StreamingResponse:
         async for evt in run_stream(
             user_id=payload.userId,
             session_id=payload.sessionId,
+            run_id=payload.runId,
             message=payload.message,
             context=payload.context,
             max_turns=payload.maxTurns,

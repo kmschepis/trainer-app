@@ -26,21 +26,66 @@ class RunCtx:
     agent_jwt: str
     user_id: str
     session_id: str
+    run_id: str
 
 
-async def _api_tool_execute(*, ctx: RunCtx, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+def _extract_tool_call_id(ctx: RunContextWrapper[RunCtx]) -> str:
+    # Best-effort: OpenAI Agents SDK may expose tool call ids under different names.
+    for attr in ("tool_call_id", "toolCallId", "call_id", "callId", "id"):
+        val = getattr(ctx, attr, None)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    meta = getattr(ctx, "metadata", None)
+    if isinstance(meta, dict):
+        for k in ("toolCallId", "tool_call_id", "call_id"):
+            val = meta.get(k)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+    return ""
+
+
+async def _api_tool_execute(*, ctx: RunContextWrapper[RunCtx], name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     timeout = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
     headers: Dict[str, str] = {}
-    if ctx.agent_jwt:
-        headers["Authorization"] = f"Bearer {ctx.agent_jwt}"
+    run_ctx = ctx.context
+    if run_ctx.agent_jwt:
+        headers["Authorization"] = f"Bearer {run_ctx.agent_jwt}"
+
+    # Audit preflight: block (server-side) until tool approval arrives.
+    if run_ctx.run_id:
+        tool_call_id = _extract_tool_call_id(ctx)
+        async with httpx.AsyncClient(timeout=timeout) as http:
+            resp = await http.post(
+                f"{run_ctx.api_base_url}/internal/audit/tool/await",
+                headers=headers,
+                json={
+                    "userId": run_ctx.user_id,
+                    "sessionId": run_ctx.session_id,
+                    "runId": run_ctx.run_id,
+                    "toolCallId": tool_call_id or None,
+                    "toolName": name,
+                    "args": args,
+                },
+            )
+            resp.raise_for_status()
+            preflight: Any = resp.json()
+
+        if isinstance(preflight, dict):
+            approved = preflight.get("approved")
+            if approved is False:
+                reason = preflight.get("reason")
+                return {"ok": False, "error": reason or "tool denied"}
+            approved_args = preflight.get("args")
+            if isinstance(approved_args, dict):
+                args = approved_args
 
     async with httpx.AsyncClient(timeout=timeout) as http:
         resp = await http.post(
-            f"{ctx.api_base_url}/internal/tools/execute",
+            f"{run_ctx.api_base_url}/internal/tools/execute",
             headers=headers,
             json={
-                "userId": ctx.user_id,
-                "sessionId": ctx.session_id,
+                "userId": run_ctx.user_id,
+                "sessionId": run_ctx.session_id,
                 "name": name,
                 "args": args,
             },
@@ -57,12 +102,13 @@ def _tool_labels() -> dict[str, str]:
         "profile_get": "Fetch the current user's onboarding profile.",
         "profile_save": "Save the user's onboarding profile (upsert).",
         "profile_delete": "Delete/clear the user's onboarding profile.",
+        "ui_action": "Emit a UI action directive (client-side only; no side effects).",
     }
 
 
 @function_tool(name_override="profile_get", description_override=_tool_labels()["profile_get"])
 async def profile_get(ctx: RunContextWrapper[RunCtx]) -> Dict[str, Any]:
-    return await _api_tool_execute(ctx=ctx.context, name="profile_get", args={})
+    return await _api_tool_execute(ctx=ctx, name="profile_get", args={})
 
 
 @function_tool(
@@ -71,12 +117,12 @@ async def profile_get(ctx: RunContextWrapper[RunCtx]) -> Dict[str, Any]:
     strict_mode=False,
 )
 async def profile_save(ctx: RunContextWrapper[RunCtx], profile: Dict[str, Any]) -> Dict[str, Any]:
-    return await _api_tool_execute(ctx=ctx.context, name="profile_save", args={"profile": profile})
+    return await _api_tool_execute(ctx=ctx, name="profile_save", args={"profile": profile})
 
 
 @function_tool(name_override="profile_delete", description_override=_tool_labels()["profile_delete"])
 async def profile_delete(ctx: RunContextWrapper[RunCtx]) -> Dict[str, Any]:
-    return await _api_tool_execute(ctx=ctx.context, name="profile_delete", args={})
+    return await _api_tool_execute(ctx=ctx, name="profile_delete", args={})
 
 
 @function_tool(
@@ -113,6 +159,7 @@ async def run_stream(
     *,
     user_id: str,
     session_id: str,
+    run_id: Optional[str],
     message: str,
     context: Optional[Dict[str, Any]],
     max_turns: int = 10,
@@ -129,7 +176,13 @@ async def run_stream(
     except Exception:
         agent_jwt = ""
 
-    run_ctx = RunCtx(api_base_url=api_base_url, agent_jwt=agent_jwt, user_id=user_id, session_id=session_id)
+    run_ctx = RunCtx(
+        api_base_url=api_base_url,
+        agent_jwt=agent_jwt,
+        user_id=user_id,
+        session_id=session_id,
+        run_id=(run_id or "").strip(),
+    )
 
     model = os.getenv("OPENAI_MODEL", "").strip() or None
     run_config = RunConfig(

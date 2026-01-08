@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 
 function UserIcon() {
@@ -74,7 +75,7 @@ export function UserMenu() {
     <div className="relative" ref={rootRef}>
       <button
         className="inline-flex items-center justify-center rounded-full border border-zinc-800 bg-zinc-950 p-2 text-zinc-200 hover:bg-zinc-900"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((v: boolean) => !v)}
         aria-label="User menu"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -94,6 +95,15 @@ export function UserMenu() {
           </div>
 
           <div className="h-px bg-zinc-900" />
+
+          <Link
+            className="block w-full px-4 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-900"
+            role="menuitem"
+            href="/coach_audit"
+            onClick={() => setOpen(false)}
+          >
+            Coach audit console
+          </Link>
 
           <button
             className="w-full px-4 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-900"

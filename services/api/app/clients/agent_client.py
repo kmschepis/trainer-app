@@ -16,6 +16,7 @@ class AgentClient:
         *,
         user_id: str,
         session_id: str,
+        run_id: str | None = None,
         message: str,
         context: Optional[Dict[str, Any]] = None,
         max_turns: int = 10,
@@ -26,6 +27,8 @@ class AgentClient:
             "message": message,
             "maxTurns": max_turns,
         }
+        if run_id:
+            payload["runId"] = run_id
         if context is not None:
             payload["context"] = context
 
