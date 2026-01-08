@@ -3,10 +3,9 @@ import { Dumbbell } from "lucide-react";
 type ChatHeaderProps = {
   wsState: string;
   sessionId: string;
-  hasProfile: boolean;
 };
 
-export function ChatHeader({ wsState, sessionId, hasProfile }: ChatHeaderProps) {
+export function ChatHeader({ wsState, sessionId }: ChatHeaderProps) {
   return (
     <header className="flex items-center justify-between border-b border-zinc-900 px-5 py-4">
       <div className="flex items-center gap-3">
@@ -20,7 +19,6 @@ export function ChatHeader({ wsState, sessionId, hasProfile }: ChatHeaderProps) 
           <div className="text-xs text-zinc-500">
             WS: {wsState}
             {sessionId ? ` • ${sessionId}` : ""}
-            {!hasProfile ? " • profile missing" : ""}
           </div>
         </div>
       </div>

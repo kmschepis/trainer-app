@@ -128,6 +128,12 @@ Before finishing:
 
 ---
 
+## Next steps (suggested follow-ons)
+- After writing skills, scan for overlap and consolidate (prefer fewer, composable skills).
+- If a skill implies an agent workflow, add/adjust "Next steps" handoffs in `.github/agents/*.agent.md`.
+
+---
+
 ## SKILL.md template (copy/paste)
 ```yaml
 ---

@@ -11,7 +11,10 @@ from starlette.responses import Response
 from app.db import close_db, init_db
 from app.metrics import http_request_duration_seconds, http_requests_total
 from app.observability import setup_observability
+from app.routes.capabilities import router as capabilities_router
 from app.routes.events import router as events_router
+from app.routes.auth_local import router as auth_router
+from app.routes.internal_tools import router as internal_tools_router
 from app.routes.realtime import router as realtime_router
 
 
@@ -29,7 +32,10 @@ logger = logging.getLogger("trainer2.api")
 
 
 app.include_router(events_router)
+app.include_router(auth_router)
 app.include_router(realtime_router)
+app.include_router(capabilities_router)
+app.include_router(internal_tools_router)
 
 
 @app.on_event("startup")

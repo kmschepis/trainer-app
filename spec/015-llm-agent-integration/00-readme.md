@@ -6,7 +6,7 @@ Make the `agent` service capable of generating coach responses via a real LLM pr
 
 ## Acceptance criteria
 
-- Agent `POST /respond` supports an LLM-backed mode controlled by environment variables.
+- Agent uses the streaming runner endpoint `POST /run` (NDJSON) for LLM-backed turns.
 - When LLM configuration is missing/invalid, the agent falls back to a deterministic stub response (no crash).
 - API WebSocket chat can be configured to call the agent (`CHAT_BACKEND=http`).
 - No A2UI actions required in this unit.

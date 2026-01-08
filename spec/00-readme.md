@@ -40,3 +40,4 @@ When AI agents make changes for a unit:
 - `spec/012-fatigue-analytics/` — fatigue math + readiness bands derived from events
 - `spec/014-chat-ui-coach-console/` — chat-first polished UI for local coach iteration
 - `spec/015-llm-agent-integration/` — wire agent service to a real LLM backend
+- `spec/016-auth-and-multiuser/` — Google login + user-scoped state

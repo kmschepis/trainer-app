@@ -1,0 +1,20 @@
+{
+  "function": {
+    "description": "Save the user's onboarding profile (upsert).",
+    "name": "profile_save",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "description": "Profile payload shaped like the onboarding draft.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "profile"
+      ],
+      "type": "object"
+    }
+  },
+  "type": "function"
+}

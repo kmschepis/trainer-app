@@ -1,0 +1,93 @@
+{
+  "function": {
+    "description": "Dispatch a UI action for the client UI (onboarding drawer, toast, etc). Always include action.type.",
+    "name": "ui_action",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "description": "A UI action object (A2UIAction).",
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "draft": {
+                  "type": "object"
+                },
+                "formId": {
+                  "const": "profile"
+                },
+                "type": {
+                  "const": "ui.form.open"
+                }
+              },
+              "required": [
+                "type",
+                "formId"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "formId": {
+                  "const": "profile"
+                },
+                "patch": {
+                  "type": "object"
+                },
+                "type": {
+                  "const": "ui.form.patch"
+                }
+              },
+              "required": [
+                "type",
+                "formId",
+                "patch"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "formId": {
+                  "const": "profile"
+                },
+                "type": {
+                  "const": "ui.form.close"
+                }
+              },
+              "required": [
+                "type",
+                "formId"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "ui.toast"
+                }
+              },
+              "required": [
+                "type",
+                "message"
+              ],
+              "type": "object"
+            }
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    }
+  },
+  "type": "function"
+}

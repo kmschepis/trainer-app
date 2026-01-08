@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, Callable, Dict, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -23,6 +24,7 @@ class EventsService:
         *,
         type: str,
         payload: Dict[str, Any],
+        user_id: Optional[uuid.UUID],
         session_id: Optional[str],
     ) -> None:
         async with self._sessionmaker() as session:
@@ -31,6 +33,7 @@ class EventsService:
                     uow.session,
                     type=type,
                     payload=payload,
+                    user_id=user_id,
                     session_id=session_id,
                 )
                 await uow.commit()

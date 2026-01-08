@@ -32,3 +32,14 @@ def setup_observability(app, service_name: str) -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     root_logger.addHandler(LoggingHandler(level=logging.INFO, logger_provider=logger_provider))
+
+    # Also emit logs to stdout so `docker logs` shows them.
+    # (OTLP export is great for Grafana/Loki, but during debugging it's important
+    # to see logs immediately.)
+    if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
+        stream = logging.StreamHandler()
+        stream.setLevel(logging.INFO)
+        stream.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        )
+        root_logger.addHandler(stream)

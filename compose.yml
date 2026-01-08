@@ -20,6 +20,11 @@ services:
       AGENT_BASE_URL: ${AGENT_BASE_URL:-http://agent:9000}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_API:-trainer2-api}
+      AUTH_REQUIRED: ${AUTH_REQUIRED:-false}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-insecure-change-me}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      AGENT_PUBLIC_KEY: ${AGENT_PUBLIC_KEY:-}
+      AGENT_PUBLIC_KEY_B64: ${AGENT_PUBLIC_KEY_B64:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -36,7 +41,14 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_TRACE: ${OPENAI_TRACE:-1}
+      OPENAI_AGENTS_TRACING: ${OPENAI_AGENTS_TRACING:-1}
+      OPENAI_AGENTS_DISABLE_TRACING: ${OPENAI_AGENTS_DISABLE_TRACING:-0}
       AGENT_SYSTEM_PROMPT_PATH: ${AGENT_SYSTEM_PROMPT_PATH:-}
+      AGENT_PRIVATE_KEY: ${AGENT_PRIVATE_KEY:-}
+      AGENT_PRIVATE_KEY_B64: ${AGENT_PRIVATE_KEY_B64:-}
+    volumes:
+      - ./services/agent/app/generated:/app/app/generated
     ports:
       - "9000:9000"
     depends_on:
@@ -49,6 +61,11 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
       NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000/realtime}
+      API_BASE_URL_INTERNAL: ${API_BASE_URL_INTERNAL:-http://api:8000}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     ports:
       - "3000:3000"
     depends_on:

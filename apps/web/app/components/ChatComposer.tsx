@@ -18,14 +18,18 @@ export function ChatComposer({ wsState, input, setInput, onSend }: ChatComposerP
       }}
     >
       <div className="relative">
-        <input
-          className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 py-3 pl-4 pr-11 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-red-500 focus:outline-none"
+        <textarea
+          rows={1}
+          className="max-h-40 w-full resize-none rounded-2xl border border-zinc-800 bg-zinc-900 py-3 pl-4 pr-11 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-red-500 focus:outline-none"
           value={input}
           placeholder={wsState === "connected" ? "Talk to coach…" : "Connecting…"}
           disabled={wsState !== "connected"}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === "Enter") onSend();
+          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
+          onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
+            if (e.key !== "Enter") return;
+            if (e.shiftKey) return;
+            e.preventDefault();
+            onSend();
           }}
         />
         <button

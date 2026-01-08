@@ -1,0 +1,12 @@
+{
+  "function": {
+    "description": "Fetch the current user's onboarding profile.",
+    "name": "profile_get",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "type": "function"
+}

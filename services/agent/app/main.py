@@ -1,17 +1,19 @@
+import json
 import logging
 import os
 import time
-import json
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 
-import httpx
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import FastAPI
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.responses import Response
+from starlette.responses import StreamingResponse
 
+from app.capabilities_sync import update_capabilities
 from app.observability import setup_observability
+from app.runner import run_stream
+from app.schemas import RunRequest
+
+import agents.tracing as agents_tracing
 
 app = FastAPI(title="trainer2-agent")
 
@@ -20,65 +22,23 @@ setup_observability(app, os.getenv("OTEL_SERVICE_NAME", "trainer2-agent"))
 logger = logging.getLogger("trainer2.agent")
 
 
-def _load_system_prompt() -> str:
-    prompt_path = os.getenv("AGENT_SYSTEM_PROMPT_PATH", "").strip()
-    if prompt_path:
-        path = Path(prompt_path)
-    else:
-        path = Path(__file__).parent / "prompts" / "system.txt"
+@app.on_event("startup")
+async def _startup() -> None:
+    # Best-effort: materialize API tool surface into auditable files.
+    if os.getenv("AGENT_PRIVATE_KEY", "").strip() or os.getenv("AGENT_PRIVATE_KEY_B64", "").strip():
+        try:
+            await update_capabilities()
+        except Exception:
+            logger.exception("capabilities_update_failed")
 
-    try:
-        return path.read_text(encoding="utf-8").strip()
-    except Exception:
-        return (
-            "You are an elite strength coach. Keep replies concise and practical. "
-            "Ask clarifying questions when needed."
-        )
-
-def _openai_compatible_reply(*, session_id: str, message: str, context: Optional[Dict[str, Any]]) -> str:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    model = os.getenv("OPENAI_MODEL", "").strip()
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
-
-    if not api_key or not model:
-        raise ValueError("missing OPENAI_API_KEY or OPENAI_MODEL")
-
-    system = _load_system_prompt()
-
-    messages: List[Dict[str, str]] = [{"role": "system", "content": system}]
-    if context:
-        messages.append(
-            {
-                "role": "system",
-                "content": "Context (JSON):\n" + json.dumps(context, ensure_ascii=False),
-            }
-        )
-    messages.append({"role": "user", "content": message})
-
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": 0.6,
-    }
-
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    with httpx.Client(timeout=20.0) as client:
-        resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
-        resp.raise_for_status()
-        data: Dict[str, Any] = resp.json()
-
-    choices = data.get("choices")
-    if not isinstance(choices, list) or not choices:
-        raise ValueError("LLM returned no choices")
-
-    msg = choices[0].get("message") if isinstance(choices[0], dict) else None
-    content = msg.get("content") if isinstance(msg, dict) else None
-    if not isinstance(content, str) or not content.strip():
-        raise ValueError("LLM returned empty content")
-
-    # Do not log the prompt or API key.
-    logger.info("llm_response", extra={"sessionId": session_id, "model": model})
-    return content.strip()
+    # OpenAI Agents SDK tracing -> OpenAI dashboard.
+    if os.getenv("OPENAI_AGENTS_DISABLE_TRACING", "0").strip() not in ("1", "true", "True"):
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if api_key:
+            try:
+                agents_tracing.set_tracing_export_api_key(api_key)
+            except Exception:
+                logger.exception("agents_tracing_setup_failed")
 
 http_requests_total = Counter(
     "http_requests_total",
@@ -91,30 +51,17 @@ http_request_duration_seconds = Histogram(
     labelnames=["method", "path"],
 )
 
-respond_calls_total = Counter(
-    "respond_calls_total",
-    "Total /respond calls",
-)
-respond_duration_seconds = Histogram(
-    "respond_duration_seconds",
-    "Respond duration (seconds)",
-)
-
-
-class RespondRequest(BaseModel):
-    sessionId: str
-    message: str
-    context: Optional[Dict[str, Any]] = None
-
-
-class RespondResponse(BaseModel):
-    text: str
-    a2uiActions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.post("/update")
+async def update() -> dict:
+    # Developer ergonomics: fetch API surface and materialize to files.
+    return await update_capabilities()
 
 
 @app.get("/metrics")
@@ -135,29 +82,16 @@ async def prometheus_http_metrics(request, call_next):
     return response
 
 
-@app.post("/respond", response_model=RespondResponse)
-def respond(payload: RespondRequest) -> RespondResponse:
-    # Always LLM-backed. If the LLM is not configured, return an error.
-    started = time.perf_counter()
-    respond_calls_total.inc()
-
-    try:
-        text = _openai_compatible_reply(
+@app.post("/run")
+async def run(payload: RunRequest) -> StreamingResponse:
+    async def gen():
+        async for evt in run_stream(
+            user_id=payload.userId,
             session_id=payload.sessionId,
             message=payload.message,
             context=payload.context,
-        )
-    except Exception as exc:
-        logger.exception("agent_respond_failed", extra={"sessionId": payload.sessionId})
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Agent failed to generate a response. "
-                "Check OPENAI_API_KEY / OPENAI_MODEL (and optionally OPENAI_BASE_URL). "
-                f"Error: {exc}"
-            ),
-        )
+            max_turns=payload.maxTurns,
+        ):
+            yield (json.dumps(evt, ensure_ascii=False) + "\n").encode("utf-8")
 
-    respond_duration_seconds.observe(time.perf_counter() - started)
-    logger.info("responded", extra={"sessionId": payload.sessionId})
-    return RespondResponse(text=text, a2uiActions=[])
+    return StreamingResponse(gen(), media_type="application/x-ndjson")

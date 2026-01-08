@@ -1,0 +1,5 @@
+services:
+  agent:
+    volumes:
+      # Bind-mount the agent source for fast iteration (no image rebuild needed)
+      - ./services/agent/app:/app/app

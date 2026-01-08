@@ -20,7 +20,7 @@ Keep a stable, debuggable realtime transport with:
 ## Inputs
 
 - API WS endpoint in `services/api/app/main.py`
-- Agent endpoint `POST /respond` in `services/agent/app/main.py`
+- Agent endpoint `POST /run` in `services/agent/app/main.py`
 - Web client in `apps/web/app/page.tsx`
 
 ## Outputs

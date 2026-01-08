@@ -11,6 +11,7 @@ class Event:
     ts: datetime
     type: str
     payload: Dict[str, Any]
+    userId: Optional[str] = None
     sessionId: Optional[str] = None
 
 

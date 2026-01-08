@@ -35,3 +35,14 @@ out/
 # --- OS ---
 .DS_Store
 Thumbs.db
+
+
+# --- Agent-generated artifacts (safe to delete / always regenerate) ---
+**/autodoc.md
+/DRY-erase.md
+/delete-candidates.md
+/Code-improvements_*.md
+
+# Optional: if you choose to have agents write run logs/temp output under .dev
+.dev/agent-runs/
+.dev/agent-output/

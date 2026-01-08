@@ -1,0 +1,12 @@
+{
+  "function": {
+    "description": "Delete/clear the user's onboarding profile.",
+    "name": "profile_delete",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "type": "function"
+}
